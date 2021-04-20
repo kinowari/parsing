@@ -3,44 +3,46 @@ from bs4 import BeautifulSoup
 import pandas as pd
 
 
-main='https://auto.ru/moskva/motorcycle/all/?moto_type=SPORTTOURISM&moto_type=SUPERSPORT&moto_type=SPORTBIKE&moto_type=SPORT_GROUP&sort=price-asc'
+url= 'https://auto.ru/moskva/motorcycle/all/?moto_type=SPORTTOURISM&moto_type=SUPERSPORT&moto_type=SPORTBIKE&moto_type=SPORT_GROUP&sort=price-asc'
 
-global links, mount
-links = []
-call = []
-goods = []
-
-def makeUrl(i):
-    'Получение ссылок на следующие страницы с товаром'
-    main = 'https://auto.ru/moskva/motorcycle/all/?moto_type=SPORTTOURISM&moto_type=SUPERSPORT&moto_type=SPORTBIKE&moto_type=SPORT_GROUP&page='+str(i)+'&sort=price-asc'
+global hrefs
+hrefs = []
+title = []
+products = []
 
 
-def getHtml(main):
-    'Получение веб-страницы на текущую страницу'
-    r = requests.get(main)
+def getHtml(url,i):
+    'Получение HTML'
+    global hrefs
+
+    if i>1:
+        hrefs = []
+        url = 'https://auto.ru/moskva/motorcycle/all/?moto_type=SPORTTOURISM&moto_type=SUPERSPORT&moto_type=SPORTBIKE&moto_type=SPORT_GROUP&page=' + str(i) + '&sort=price-asc'
+
+    r = requests.get(url)
     return r.content.decode('utf-8')
 
 
-def score():
+
+def mount():
     'Получения количества страниц с товарами'
-    global mount
-    all = BeautifulSoup(getHtml(main))
-    mount = int(all.find_all('span', class_="Button__text")[-4].text)
+    content = BeautifulSoup(getHtml(url,0))
+    return int(content.find_all('span', class_="Button__text")[-4].text)
 
 
 def allPage(html):
     'Получение ссылок на все товары на странице '
-    global links
-    all= BeautifulSoup(html)
-    pages = all.find_all('a', class_="Link ListingItemTitle-module__link")
-    names = all.find_all('a', class_="Link ListingItemTitle-module__link")
+    global hrefs
+    content= BeautifulSoup(html)
+    pages = content.find_all('a', class_="Link ListingItemTitle-module__link")
+    names = content.find_all('a', class_="Link ListingItemTitle-module__link")
 
     for page in pages:
-        links.append(page.get('href'))
+        hrefs.append(page.get('href'))
     for name in names:
-        call.append(name.text)
+        title.append(name.text)
 
-    return links
+    return hrefs
 
 
 def getNormal(text):
@@ -52,58 +54,53 @@ def getNormal(text):
     return string
 
 
-
-def getParametrs(links):
+def getParametrs(hrefs):
     'Получение и запись в массив нужных параметров'
-    for i in range(len(links)):
-        url = getHtml(links[i])
-        moto = BeautifulSoup(url)
-        preludia = moto.find('li', class_="CardInfoRow CardInfoRow_kmAge")
-        mileage = preludia.find_all('span', class_ = "CardInfoRow__cell")[1].text
-        place = moto.find('span', class_ = "MetroListPlace__regionName MetroListPlace_nbsp").text
-        price = moto.find('span', class_="OfferPriceCaption__price").text
+    for i in range(len(hrefs)):
+        url = getHtml(hrefs[i],0)
+        product = BeautifulSoup(url)
+        premileage = product.find('li', class_="CardInfoRow CardInfoRow_kmAge")
+        try:
+            mileage = premileage .find_all('span', class_ = "CardInfoRow__cell")[1].text
 
-        goods.append([getNormal(price),getNormal(mileage),getNormal(place),links[i]])
+        except:mileage='None'
+        place = product.find('span', class_ = "MetroListPlace__regionName MetroListPlace_nbsp").text
+        price = product.find('span', class_="OfferPriceCaption__price").text
 
-    return goods
+        products.append([getNormal(price), getNormal(mileage), getNormal(place), hrefs[i]])
+
+    return products
 
 
-def writeExcel(goods):
+def writeExcel(products):
     'Запись в Excel файл'
     price = []
     mileage = []
     place = []
-    links = []
+    hrefs = []
 
-    for i in range(len(goods)):
-        price.append(goods[i][0])
-        mileage.append(goods[i][1])
-        place.append(goods[i][2])
-        links.append(goods[i][3])
+    for i in range(len(products)):
+        price.append(products[i][0])
+        mileage.append(products[i][1])
+        place.append(products[i][2])
+        hrefs.append(products[i][3])
 
-    df = pd.DataFrame({'Название': call,
+    df = pd.DataFrame({'Название': title,
                         'Цена': price,
                         'Пробег': mileage,
                         'Расположение': place,
-                        'Ссылки':links})
+                        'Ссылки':hrefs})
 
     df.to_excel('C:\Renata\l.xlsx')
 
 
-def building(main):
+def building(url):
     'Сборка всего функционала'
-    global links
-    global mount
-    score()
+    global hrefs
+    for i in range(1,mount()+1):
+        getParametrs(allPage(getHtml(url,i)))
 
-    getParametrs(allPage(getHtml(main)))
-
-    for i in range(2,mount+1):
-        makeUrl(i)
-        links = []
-        getParametrs(allPage(getHtml(main)))
-
-    writeExcel(goods)
+    writeExcel(products)
 
 
-building(main)
+building(url)
